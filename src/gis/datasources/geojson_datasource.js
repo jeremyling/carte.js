@@ -70,8 +70,8 @@
 
 	GeoJSONDataSource.prototype._parseCoordinates = function(coordinates) {
 		var points = [];
-		for(var j=0; j<coordinates[i].length; j++) {
-			var latLng = new google.maps.LatLng(coordinates[i][j][1], coordinates[i][j][0]);
+		for(var i=0; i<coordinates.length; i++) {
+			var latLng = new google.maps.LatLng(coordinates[i][1], coordinates[i][0]);
 			var point = this.projection.fromLatLngToPoint(latLng);
 			points.push([point.x, point.y]);
 		}

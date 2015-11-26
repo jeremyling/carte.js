@@ -95,7 +95,13 @@
 						// sample tiled vectors
 						var vectorSource = new GeoJSONDataSource("sample_data/tiles/geom", projection);
 						var vectorProvider = new TileProvider(vectorSource, http, Q);
-						polygons = new VectorTileView(vectorProvider, webGlView, null, true);
+						var vectorLayerOptions = {
+							fillColor: 0x0000FF,
+							fillOpacity: 0.25,
+							strokeColor: 0xFFFFFF,
+							strokeOpacity: 0.25
+						};
+						polygons = new VectorTileView(vectorProvider, webGlView, vectorLayerOptions);
 						tileController.addView(polygons);
 
 						// start updating tiles and webglview

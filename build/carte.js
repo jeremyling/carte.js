@@ -132,7 +132,7 @@ var carte = {};
 		this.ulx = x;
 		this.uly = y;
 		this.lrx = x+width;
-		this.lry = y+width;
+		this.lry = y+height;
 	};
 
 	Rectangle.prototype.containsPoint = function(x, y) {
@@ -986,7 +986,7 @@ var carte = {};
 		return props[0];
 	})();
 
-	var WebGLView = function(map) {
+	var WebGLView = function(map, options) {
 		this._map = map;
 		this.camera = new THREE.OrthographicCamera(0, 255, 0, 255, -3000, 3000);
 		this.camera.position.z = 1000;
@@ -1007,6 +1007,9 @@ var carte = {};
 		this.animationFrame = null;
 		this.objectRenderers = [];
 		this.numMasks = 0;
+
+		options = options ? options : {};
+		this.maskAlwaysEnabled = options.maskAlwaysEnabled;
 
 		this.update = function() {
 			var map = this.map;
@@ -1057,7 +1060,7 @@ var carte = {};
 			this.update();
 
 			var context = this.context, renderer = this.renderer;
-			var maskEnabled = this.numMasks > 0;
+			var maskEnabled = this.numMasks > 0 || this.maskAlwaysEnabled;
 
 			this.renderer.setClearColor(0xffffff, 0);
 			this.renderer.clear(true, true, true);
@@ -1233,6 +1236,18 @@ var carte = {};
 	WebGLView.prototype.destroyMask = function(geometry) {
 		delete geometry.shape;
 		delete geometry.outline;
+	};
+
+	WebGLView.prototype.hitsMask = function(x, y) {
+		if(!this.raycaster)
+			this.raycaster = new THREE.Raycaster();
+		if(!this.mouse)
+			this.mouse = new THREE.Vector2();
+		this.mouse.x = (x / this.width) * 2 - 1;
+		this.mouse.y = -(y / this.height) * 2 + 1;
+		this.raycaster.setFromCamera(this.mouse, this.camera);
+		var intersections = this.raycaster.intersectObjects(this.sceneMask.children);
+		return intersections.length > 0;
 	};
 
 	window.WebGLView = WebGLView;
@@ -1458,9 +1473,9 @@ var carte = {};
 		var scale = Math.pow(2, this.zoom);
 		var offsetX = offset.x * scale;
 		var offsetY = offset.y * scale;
-		var screenScale = 1/Math.pow(2, this.map.getZoom() - this.zoom);
-		var mouseX = screenX * screenScale;
-		var mouseY = screenY * screenScale;
+		var worldScale = 1/Math.pow(2, this.map.getZoom() - this.zoom);
+		var worldX = screenX * worldScale;
+		var worldY = screenY * worldScale;
 		var box = this.box;
 		var views = this.views;
 		var column=0, row=0;
@@ -1469,7 +1484,7 @@ var carte = {};
 		for(column=this.clampedBounds.ulx; column<=this.clampedBounds.lrx; column++) {
 			for(row=this.clampedBounds.uly; row<=this.clampedBounds.lry; row++) {
 				box.update(column*MERCATOR_RANGE-offsetX, row*MERCATOR_RANGE-offsetY, MERCATOR_RANGE, MERCATOR_RANGE);
-				if(box.containsPoint(mouseX, mouseY)) {
+				if(box.containsPoint(worldX, worldY)) {
 					// get the first hit object from the top most layer
 					var outsideMaxZoom = this.zoom == this.map.getZoom();
 					for(var i=views.length-1; i>=0; i--) {
@@ -1654,6 +1669,7 @@ var carte = {};
 		this.tileProvider = tileProvider;
 		this.webGlView = webGlView;
 		this.tiles = {};
+		this.shownTiles = {};
 	};
 
 	ImageTileView.prototype.setTileSize = function(tileSize) {
@@ -1671,6 +1687,9 @@ var carte = {};
 
 	ImageTileView.prototype.showTile = function(x, y, z) {
 		var url = this.tileProvider.getTileUrl(x, y, z);
+		if(this.shownTiles[url]) return;
+		this.shownTiles[url] = true;
+
 		if(this.tiles[url]) {
 			if(!this.tiles[url].geometry) {
 				var scaleFactor = Math.pow(2, z);
@@ -1699,8 +1718,10 @@ var carte = {};
 						image: self.tiles[url].data,
 						imageName: url
 					};
-					self.tiles[url].geometry = self.webGlView.addSprite(spriteOptions);
-					self.webGlView.draw();
+					if(self.shownTiles[url]) {
+						self.tiles[url].geometry = self.webGlView.addSprite(spriteOptions);
+						self.webGlView.draw();
+					}
 				}, function(reason){
 					//console.log(reason);
 				});
@@ -1709,6 +1730,7 @@ var carte = {};
 
 	ImageTileView.prototype.hideTile = function(x, y, z) {
 		var url = this.tileProvider.getTileUrl(x, y, z);
+		this.shownTiles[url] = false;
 		if(this.tiles[url] && this.tiles[url].geometry) {
 			this.webGlView.removeSprite(this.tiles[url].geometry);
 			this.tiles[url].geometry = null;
@@ -1722,6 +1744,7 @@ var carte = {};
 				this.tiles[url].geometry = null;
 			}
 		}
+		for(var url in this.shownTiles) this.shownTiles[url] = false;
 		this.webGlView.draw();
 	};
 
@@ -1768,10 +1791,6 @@ var carte = {};
 		this.mouseSphere = new THREE.Sphere();
 		this.tiles = {};
 		this.shownTiles = {};
-	};
-
-	VectorTileView.prototype.setTileSize = function(tileSize) {
-		this.tileSize = tileSize;
 	};
 
 	VectorTileView.prototype.setTileSize = function(tileSize) {
@@ -1866,6 +1885,7 @@ var carte = {};
 				this.tiles[url].points = null;
 			}
 		}
+		for(var url in this.shownTiles) this.shownTiles[url] = false;
 		this.webGlView.draw();
 	};
 
